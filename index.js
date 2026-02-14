@@ -112,9 +112,7 @@ function buildEmailHtml({ title, badge, lines = [], meta = {} }) {
           </table>
         </div>
 
-        <div style="margin-top:12px;color:#94a3b8;font-size:12px">
-          This is an automated message from your Fish Feeder backend.
-        </div>
+        
       </div>
     </div>
   </div>
@@ -224,7 +222,7 @@ function computeLastScheduledEpoch(now, csv) {
 }
 
 async function run() {
-  await client.connect();
+  
   const db = client.db();
   const devices = db.collection("devices");
   const events = db.collection("events");
