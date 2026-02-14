@@ -235,6 +235,7 @@ async function run() {
     return;
   }
 
+  
   const now = Date.now();
   const last = lastEmailSentAt.get(key) || 0;
   if (now - last < emailCooldownMs) return;
@@ -300,7 +301,7 @@ async function run() {
         oled: cfg.oledOn ? 1 : 0,
       })
     );
-
+    
     console.log("[SYNC] pushed DB state -> device");
   }
 
@@ -333,10 +334,39 @@ async function run() {
         { $set: { ...setBase, online: true } }
       );
 
-      if (res.modifiedCount === 1) {
+    //   if (res.modifiedCount === 1) {
         
 
-        if (hadSeenBefore) {
+    //     if (hadSeenBefore) {
+    //       await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
+    //         subject: `✅ Device back online (${deviceId})`,
+    //         text: `Device back online.\nDevice: ${deviceId}\nTime: ${fmtTime(ts)}`,
+    //         html: buildEmailHtml({
+    //           title: "Device back online",
+    //           badge: "ONLINE",
+    //           lines: ["Heartbeat received. Device is reachable again."],
+    //           meta: {
+    //             Device: deviceId,
+    //             Time: fmtTime(ts),
+    //             RSSI: typeof parsed.rssi === "number" ? `${parsed.rssi} dBm` : "—",
+    //             IP: parsed.ip || "—",
+    //           },
+    //         }),
+    //       });
+    //     }
+    //   } else {
+    //     await devices.updateOne({ deviceId }, { $set: { ...setBase, online: true } });
+    //   }
+
+      seenOnlineThisSession = true;
+      return;
+    }
+
+    if (parsed.type === "device_online") {
+      try {
+        // ✅ fixed call
+        await pushLatestStateToDevice(deviceId);
+        
           await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
             subject: `✅ Device back online (${deviceId})`,
             text: `Device back online.\nDevice: ${deviceId}\nTime: ${fmtTime(ts)}`,
@@ -352,19 +382,7 @@ async function run() {
               },
             }),
           });
-        }
-      } else {
-        await devices.updateOne({ deviceId }, { $set: { ...setBase, online: true } });
-      }
-
-      seenOnlineThisSession = true;
-      return;
-    }
-
-    if (parsed.type === "device_online") {
-      try {
-        // ✅ fixed call
-        await pushLatestStateToDevice(deviceId);
+        
       } catch (e) {
         console.log("[SYNC] failed:", e?.message || e);
       }
