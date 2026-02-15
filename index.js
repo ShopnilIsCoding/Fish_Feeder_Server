@@ -222,7 +222,7 @@ function computeLastScheduledEpoch(now, csv) {
 }
 
 async function run() {
-  
+  await client.connect();
   const db = client.db();
   const devices = db.collection("devices");
   const events = db.collection("events");
@@ -315,59 +315,76 @@ async function run() {
     const deviceId = DEVICE_ID;
     const ts = new Date();
 
-    const prev = await devices.findOne(
-      { deviceId },
-      { projection: { online: 1, lastSeen: 1 } }
-    );
-    const hadSeenBefore = !!prev?.lastSeen;
+    // const prev = await devices.findOne(
+    //   { deviceId },
+    //   { projection: { online: 1, lastSeen: 1 } }
+    // );
+    // const hadSeenBefore = !!prev?.lastSeen;
+
+    // if (parsed.type === "hb") {
+    //   const setBase = {
+    //     lastSeen: ts,
+    //     updatedAt: nowIso(),
+    //     ...(typeof parsed.rssi === "number" ? { rssi: parsed.rssi } : {}),
+    //     ...(typeof parsed.ip === "string" && parsed.ip ? { ip: parsed.ip } : {}),
+    //   };
+
+    //   const res = await devices.updateOne(
+    //     { deviceId, online: false },
+    //     { $set: { ...setBase, online: true } }
+    //   );
+
+    // //   if (res.modifiedCount === 1) {
+        
+
+    // //     if (hadSeenBefore) {
+    // //       await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
+    // //         subject: `✅ Device back online (${deviceId})`,
+    // //         text: `Device back online.\nDevice: ${deviceId}\nTime: ${fmtTime(ts)}`,
+    // //         html: buildEmailHtml({
+    // //           title: "Device back online",
+    // //           badge: "ONLINE",
+    // //           lines: ["Heartbeat received. Device is reachable again."],
+    // //           meta: {
+    // //             Device: deviceId,
+    // //             Time: fmtTime(ts),
+    // //             RSSI: typeof parsed.rssi === "number" ? `${parsed.rssi} dBm` : "—",
+    // //             IP: parsed.ip || "—",
+    // //           },
+    // //         }),
+    // //       });
+    // //     }
+    // //   } else {
+    // //     await devices.updateOne({ deviceId }, { $set: { ...setBase, online: true } });
+    // //   }
+
+    //   seenOnlineThisSession = true;
+    //   return;
+    // }
 
     if (parsed.type === "hb") {
-      const setBase = {
-        lastSeen: ts,
-        updatedAt: nowIso(),
-        ...(typeof parsed.rssi === "number" ? { rssi: parsed.rssi } : {}),
-        ...(typeof parsed.ip === "string" && parsed.ip ? { ip: parsed.ip } : {}),
-      };
+  const setBase = {
+    lastSeen: ts,
+    updatedAt: nowIso(),
+    ...(typeof parsed.rssi === "number" ? { rssi: parsed.rssi } : {}),
+    ...(typeof parsed.ip === "string" && parsed.ip ? { ip: parsed.ip } : {}),
+  };
 
-      const res = await devices.updateOne(
-        { deviceId, online: false },
-        { $set: { ...setBase, online: true } }
-      );
+  const prev = await devices.findOne(
+    { deviceId },
+    { projection: { online: 1, lastSeen: 1 } }
+  );
 
-    //   if (res.modifiedCount === 1) {
-        
+  // Always update lastSeen (and keep online=true)
+  await devices.updateOne(
+    { deviceId },
+    { $set: { ...setBase, online: true } },
+    { upsert: true }
+  );
 
-    //     if (hadSeenBefore) {
-    //       await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
-    //         subject: `✅ Device back online (${deviceId})`,
-    //         text: `Device back online.\nDevice: ${deviceId}\nTime: ${fmtTime(ts)}`,
-    //         html: buildEmailHtml({
-    //           title: "Device back online",
-    //           badge: "ONLINE",
-    //           lines: ["Heartbeat received. Device is reachable again."],
-    //           meta: {
-    //             Device: deviceId,
-    //             Time: fmtTime(ts),
-    //             RSSI: typeof parsed.rssi === "number" ? `${parsed.rssi} dBm` : "—",
-    //             IP: parsed.ip || "—",
-    //           },
-    //         }),
-    //       });
-    //     }
-    //   } else {
-    //     await devices.updateOne({ deviceId }, { $set: { ...setBase, online: true } });
-    //   }
-
-      seenOnlineThisSession = true;
-      return;
-    }
-
-    if (parsed.type === "device_online") {
-      try {
-        // ✅ fixed call
-        await pushLatestStateToDevice(deviceId);
-        
-          await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
+  // Send back-online email only on transition
+  if (prev?.online === false && prev?.lastSeen) {
+    await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
             subject: `✅ Device back online (${deviceId})`,
             text: `Device back online.\nDevice: ${deviceId}\nTime: ${fmtTime(ts)}`,
             html: buildEmailHtml({
@@ -382,6 +399,33 @@ async function run() {
               },
             }),
           });
+  }
+
+  seenOnlineThisSession = true;
+  return;
+}
+
+
+    if (parsed.type === "device_online") {
+      try {
+        // ✅ fixed call
+        await pushLatestStateToDevice(deviceId);
+        
+          // await sendAlertOnce(deviceId,`${deviceId}:back_online`, {
+          //   subject: `✅ Device back online (${deviceId})`,
+          //   text: `Device back online.\nDevice: ${deviceId}\nTime: ${fmtTime(ts)}`,
+          //   html: buildEmailHtml({
+          //     title: "Device back online",
+          //     badge: "ONLINE",
+          //     lines: ["Heartbeat received. Device is reachable again."],
+          //     meta: {
+          //       Device: deviceId,
+          //       Time: fmtTime(ts),
+          //       RSSI: typeof parsed.rssi === "number" ? `${parsed.rssi} dBm` : "—",
+          //       IP: parsed.ip || "—",
+          //     },
+          //   }),
+          // });
         
       } catch (e) {
         console.log("[SYNC] failed:", e?.message || e);
