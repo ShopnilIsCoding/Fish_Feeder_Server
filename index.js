@@ -373,17 +373,13 @@ async function run() {
     ...(typeof parsed.ip === "string" && parsed.ip ? { ip: parsed.ip } : {}),
   };
 
-  const prev = await devices.findOne(
+   const r = await devices.findOneAndUpdate(
     { deviceId },
-    { projection: { online: 1, lastSeen: 1 } }
+    { $set: setBase, $setOnInsert: { createdAt: nowIso(), deviceId } },
+    { upsert: true, returnDocument: "before", projection: { online: 1, lastSeen: 1 } }
   );
 
-  // Always update lastSeen (and keep online=true)
-  await devices.updateOne(
-    { deviceId },
-    { $set: { ...setBase, online: true } },
-    { upsert: true }
-  );
+  const prev = r.value;
 
   // Send back-online email only on transition
   if (prev?.online === false && prev?.lastSeen) {
