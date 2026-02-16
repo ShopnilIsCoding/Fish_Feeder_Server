@@ -9,9 +9,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files for the web dashboard
-app.use(express.static("public"));
-
 const PORT = Number(process.env.PORT || 5000);
 const MONGO_URI = process.env.MONGO_URI;
 const ABLY_KEY = process.env.ABLY_KEY;
@@ -373,13 +370,17 @@ async function run() {
     ...(typeof parsed.ip === "string" && parsed.ip ? { ip: parsed.ip } : {}),
   };
 
-   const r = await devices.findOneAndUpdate(
+  const prev = await devices.findOne(
     { deviceId },
-    { $set: setBase, $setOnInsert: { createdAt: nowIso(), deviceId } },
-    { upsert: true, returnDocument: "before", projection: { online: 1, lastSeen: 1 } }
+    { projection: { online: 1, lastSeen: 1 } }
   );
 
-  const prev = r.value;
+  // Always update lastSeen (and keep online=true)
+  await devices.updateOne(
+    { deviceId },
+    { $set: { ...setBase, online: true } },
+    { upsert: true }
+  );
 
   // Send back-online email only on transition
   if (prev?.online === false && prev?.lastSeen) {
